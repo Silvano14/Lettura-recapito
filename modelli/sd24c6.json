@@ -1,0 +1,73 @@
+{
+  "modello": "SD24C6",
+  "codice": "SD24C6",
+  "predefinito": true,
+  "caselle": [
+    {
+      "id": "dest_irreperibile",
+      "categoria": "destinatario",
+      "etichetta": "Destinatario - Irreperibile",
+      "x": 0.062,
+      "y": 0.388
+    },
+    {
+      "id": "dest_invio_rifiutato",
+      "categoria": "destinatario",
+      "etichetta": "Destinatario - Invio rifiutato",
+      "x": 0.062,
+      "y": 0.507
+    },
+    {
+      "id": "dest_sconosciuto",
+      "categoria": "destinatario",
+      "etichetta": "Destinatario - Sconosciuto",
+      "x": 0.062,
+      "y": 0.625
+    },
+    {
+      "id": "dest_trasferito",
+      "categoria": "destinatario",
+      "etichetta": "Destinatario - Trasferito",
+      "x": 0.062,
+      "y": 0.747
+    },
+    {
+      "id": "ind_inesatto",
+      "categoria": "indirizzo",
+      "etichetta": "Indirizzo - Inesatto",
+      "x": 0.422,
+      "y": 0.388
+    },
+    {
+      "id": "ind_inesistente",
+      "categoria": "indirizzo",
+      "etichetta": "Indirizzo - Inesistente",
+      "x": 0.422,
+      "y": 0.507
+    },
+    {
+      "id": "ind_insufficiente",
+      "categoria": "indirizzo",
+      "etichetta": "Indirizzo - Insufficiente",
+      "x": 0.422,
+      "y": 0.625
+    },
+    {
+      "id": "ind_altro",
+      "categoria": "indirizzo",
+      "etichetta": "Indirizzo - Altro",
+      "x": 0.422,
+      "y": 0.747
+    }
+  ],
+  "riferimento": "sd24c6_ref.png",
+  "dim_riferimento": [
+    600,
+    267
+  ],
+  "template": "sd24c6_tpl.png",
+  "win_w": 0.022,
+  "win_h": 0.041,
+  "abs_min": 0.04,
+  "leggi_qr": true
+}

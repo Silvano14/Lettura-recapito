@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Mancato recapito</title>
+<style>
+  :root{ --bg:#0f1115; --card:#1a1d24; --line:#2b2f3a; --txt:#e8eaf0; --mut:#9aa0ad;
+         --accent:#3b82f6; --ok:#16a34a; --warn:#d97706; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt);
+       height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+  header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  header b{font-size:15px}
+  #modelloBtn{background:#222634;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px}
+  /* layout a tutta altezza, valido in QUALSIASI orientamento: la camera riempie lo spazio,
+     i controlli stanno sotto. fase2 scorre internamente se serve (niente scroll di pagina). */
+  .wrap{flex:1;min-height:0;width:100%;max-width:960px;margin:0 auto;padding:8px 10px;display:flex;flex-direction:column}
+  #fase1:not(.hidden){display:flex;flex-direction:column;gap:8px;flex:1;min-height:0}
+  #fase2:not(.hidden){display:flex;flex-direction:column;gap:0;flex:1;min-height:0;overflow:auto}
+  .camArea{position:relative;border-radius:14px;overflow:hidden;background:#000;flex:1;min-height:0;width:100%}
+  video,canvas,img.prev{width:100%;height:100%;object-fit:cover;display:block}
+  /* La cornice-guida si adatta alle proporzioni del modello scelto: i margini --fl/--ft
+     sono calcolati in JS dal rapporto del riferimento e dal rapporto reale della camera,
+     così la sagoma ghost non è mai distorta e il ritaglio inviato a /analizza non è deformato.
+     I fallback (12%/5%) valgono finché il JS non li ricalcola. */
+  /* la sagoma riempie ESATTAMENTE la cornice: contenitore dimensionato dai margini, img al 100%.
+     (un <img> assoluto con width:auto userebbe la dimensione naturale, ignorando right/bottom) */
+  .ghostbox{position:absolute;left:var(--fl,12%);right:var(--fl,12%);top:var(--ft,5%);bottom:var(--ft,5%);pointer-events:none}
+  .ghostbox img{width:100%;height:100%;object-fit:fill;opacity:.32;border-radius:12px;display:block}
+  .guide{position:absolute;inset:0;pointer-events:none}
+  .guide div.cornice{position:absolute;left:var(--fl,12%);right:var(--fl,12%);top:var(--ft,5%);bottom:var(--ft,5%);border:3px dashed rgba(255,255,255,.85);border-radius:12px;transition:border-color .15s,box-shadow .15s}
+  .guide.vicino div.cornice{border-color:#f59e0b}
+  .guide.lock div.cornice{border-color:#22c55e;border-style:solid;box-shadow:0 0 0 9999px rgba(34,197,94,.07) inset}
+  .guide.attesa div.cornice{border-color:#6b7280}
+  .badge{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;padding:6px 12px;border-radius:20px;font-size:13px;white-space:nowrap}
+  /* badge stato QR (il QR si legge dal fotogramma intero) */
+  #qrbadge{position:absolute;left:50%;top:var(--ft,5%);transform:translate(-50%,6px);background:rgba(0,0,0,.55);color:#cfe3ff;padding:4px 11px;border-radius:14px;font-size:12px;white-space:nowrap;pointer-events:none;max-width:80%;overflow:hidden;text-overflow:ellipsis}
+  #qrbadge.ok{background:rgba(22,163,74,.85);color:#fff}
+  #autoBtn{margin-left:auto;background:#16233b;color:var(--txt);border:1px solid var(--accent);border-radius:10px;padding:8px 12px;font-size:14px}
+  #autoBtn.off{background:#222634;border-color:var(--line);color:var(--mut)}
+  .hint{font-size:13px;color:var(--mut);margin:10px 2px}
+  button.big{width:100%;border:0;border-radius:12px;padding:16px;font-size:17px;font-weight:600;color:#fff;background:var(--accent);margin-top:12px}
+  button.big:active{filter:brightness(.9)}
+  .codice{width:100%;margin-top:12px;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--txt);font-size:16px}
+  .avviso{background:#3a2a12;border:1px solid var(--warn);color:#f5c878;padding:10px 12px;border-radius:10px;margin-top:12px;font-size:14px}
+  .grp{margin-top:16px}
+  .grp h4{margin:0 0 8px;color:var(--mut);font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+  .opt{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--card);color:var(--txt);
+       border-radius:12px;padding:15px;font-size:16px;margin-bottom:8px}
+  .opt.sel{border-color:var(--accent);background:#16233b}
+  .opt.proposta{border-color:var(--ok)}
+  .opt .tag{float:right;font-size:12px;color:var(--ok)}
+  /* fase2: scelte compatte in griglia unica — destinatario a sinistra, indirizzo a destra (come la busta) */
+  .opzioni-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+  .opzioni-grid .col h4{margin:0 0 6px;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  #opzioni .opt{padding:9px 11px;font-size:14px;margin-bottom:6px;border-radius:10px}
+  /* riga del codice raccomandata (riempito dal QR, non editabile a mano) + pulsante ri-scansione */
+  .codice-row{display:flex;gap:8px;margin-top:10px;align-items:stretch}
+  .codice-row .codice{margin-top:0;flex:1}
+  .codice[readonly]{opacity:.95}
+  .qrbtn{border:1px solid var(--accent);background:#16233b;color:var(--txt);border-radius:12px;padding:0 16px;font-size:14px;white-space:nowrap;font-weight:600}
+  /* overlay di scansione del solo QR */
+  .qrscan{position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:4/3;max-height:44vh;margin-bottom:8px}
+  .qrscan video{width:100%;height:100%;object-fit:cover;display:block}
+  .qrscan>div{position:absolute;left:22%;right:22%;top:14%;bottom:14%;border:3px dashed rgba(96,165,250,.9);border-radius:12px;pointer-events:none}
+  #dlgQr{width:92%;max-width:460px;max-height:92vh;overflow:auto}
+  .hidden{display:none}
+  dialog{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:14px;width:90%;max-width:420px}
+  dialog .opt{margin-bottom:8px}
+  .saved{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ok);color:#fff;padding:12px 18px;border-radius:30px;font-weight:600;opacity:0;transition:.2s}
+  .saved.show{opacity:1}
+  /* controlli sotto la camera; in verifica l'anteprima è contenuta e le scelte non si dilatano */
+  .controls{display:flex;gap:8px;align-items:center;flex:none}
+  .controls .big{margin-top:0;flex:1}
+  #fase2 .prev{flex:none;max-height:34vh}
+  #fase2 #opzioni,#fase2 .codice-row,#fase2 .big,#fase2 .avviso{flex:none}
+  /* riga diagnostica: perché non è stata proposta una casella (livello, aggancio, punteggi) */
+  #diag{flex:none;margin-top:10px;padding:9px 11px;border-radius:10px;border:1px dashed var(--line);
+        background:#15171d;color:var(--mut);font-size:12px;line-height:1.5}
+  #diag b{color:var(--txt)}
+</style>
+</head>
+<body>
+<header>
+  <b>Mancato recapito</b>
+  <button id="autoBtn">Auto: ON</button>
+  <button id="modelloBtn">Modello: …</button>
+</header>
+
+<div class="wrap">
+  <!-- FASE 1: acquisizione -->
+  <div id="fase1">
+    <div class="camArea">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="ghostbox"><img id="ghost" alt=""></div>
+      <div class="guide"><div class="cornice"></div></div>
+      <div id="qrbadge" class="hidden">Leggo il QR automaticamente…</div>
+      <div class="badge" id="badge">Inquadra il riquadro nella cornice</div>
+    </div>
+    <input type="file" id="file" class="hidden" accept="image/*" capture="environment">
+    <div class="controls">
+      <button class="big" id="scatta">Scatta e analizza</button>
+    </div>
+  </div>
+
+  <!-- FASE 2: verifica e conferma -->
+  <div id="fase2" class="hidden">
+    <img class="prev" id="prev" style="border-radius:12px;aspect-ratio:16/9;object-fit:contain;background:#000">
+    <div id="avviso" class="avviso hidden"></div>
+    <div class="codice-row" id="codiceRow">
+      <input class="codice" id="codice" placeholder="Codice raccomandata (dal QR)" readonly>
+      <button class="qrbtn" id="scanQrBtn">Scansiona QR</button>
+    </div>
+    <div id="opzioni"></div>
+    <div id="diag" class="hidden"></div>
+    <button class="big" id="conferma" style="background:var(--ok)">Conferma e salva</button>
+    <button class="big" id="rifai" style="background:#374151">Rifai la foto</button>
+  </div>
+</div>
+
+<dialog id="dlgModelli"></dialog>
+<input type="file" id="qrfile" class="hidden" accept="image/*" capture="environment">
+<dialog id="dlgQr">
+  <h3 style="margin-top:0">Scansiona solo il codice QR</h3>
+  <div class="qrscan"><video id="qrvideo" autoplay playsinline muted></video><div></div></div>
+  <p id="qrStatus" class="hint" style="margin:6px 2px">Inquadra il QR nel riquadro azzurro…</p>
+  <button class="big" id="qrAnnulla" style="background:#374151">Chiudi</button>
+</dialog>
+<div class="saved" id="toast">Salvato ✓</div>
+
+<script src="/static/jsQR.js"></script>
+<script>
+let MODELLI = [], modello = null, scelta = null, canvasBlob = null, qrValue = '';
+let FRAME = {x:0.12, y:0.05, w:0.76, h:0.90};    // cornice-guida = il riquadro (ciò che si inquadra e si analizza)
+
+const $ = s => document.querySelector(s);
+
+async function initModelli(){
+  MODELLI = await (await fetch('/modelli')).json();
+  if(MODELLI.length){ setModello(MODELLI.find(m=>m.predefinito) || MODELLI[0]); }
+  $('#modelloBtn').onclick = apriDialogModelli;
+}
+function setModello(m){
+  modello = m;
+  $('#modelloBtn').textContent = 'Modello: ' + m.nome;
+  const g = $('#ghost');
+  g.onload = applyFrame;                         // appena arriva il riferimento ne conosco il rapporto
+  g.src = '/riferimento/' + m.id;                // sagoma-guida del modello scelto
+}
+
+// Cornice-guida del rapporto del modello scelto, centrata nel riquadro mostrato a schermo.
+// NB: il video riempie il camArea con object-fit:cover (può avere orientamento diverso, es.
+// frame verticale su telefono in orizzontale): la corrispondenza cornice↔ritaglio è gestita
+// in rettangoloVideo(), che tiene conto del cover-crop. Le frazioni FRAME sono % del camArea.
+function applyFrame(){
+  const g = $('#ghost'), cam = $('.camArea');
+  const CW = cam.clientWidth, CH = cam.clientHeight;
+  if(!CW || !CH) return;
+  const boxRatio = (g.naturalWidth && g.naturalHeight) ? g.naturalWidth/g.naturalHeight : 1.5;
+  const ratioCam = CW / CH;                       // rapporto del riquadro come è mostrato
+  const rel = boxRatio / ratioCam;                // la cornice = il riquadro (niente banda)
+  let fw, fh;
+  if(rel >= 1){ fw = 0.90; fh = 0.90/rel; }
+  else        { fh = 0.90; fw = 0.90*rel; }
+  FRAME = {x:(1-fw)/2, y:(1-fh)/2, w:fw, h:fh};
+  const root = document.documentElement.style;
+  root.setProperty('--fl', (FRAME.x*100).toFixed(2)+'%');
+  root.setProperty('--ft', (FRAME.y*100).toFixed(2)+'%');
+  // il QR si legge dal fotogramma intero (vedi scanQRFromVideo): mostro il badge se il modello lo prevede
+  $('#qrbadge').classList.toggle('hidden', !(modello && modello.leggi_qr) || !stream);
+}
+
+// ---- Lettura QR (jsQR, lato client): robusta a riflesso/posizione, prova molti fotogrammi ----
+function aggiornaQrBadge(){
+  const b=$('#qrbadge');
+  if(qrValue){ b.textContent='QR ✓ '+qrValue; b.classList.add('ok'); }
+  else { b.textContent='Inquadra anche il QR (in alto)'; b.classList.remove('ok'); }
+}
+// normalizza il contenuto del QR: toglie prefissi-schema tipo "tel:", "sms:", "mailto:"
+// (i QR numerici vengono spesso generati come "tel:12345") e spazi → resta solo il valore
+function pulisciQr(s){
+  if(!s) return '';
+  return String(s).trim().replace(/^(tel|sms|smsto|mailto)\s*:\s*(\/\/)?/i, '').trim();
+}
+function scanQRCanvas(canvas){
+  // scandisce solo se il modello prevede il QR e non l'ho già letto per questa busta
+  if(typeof jsQR!=='function' || qrValue || !modello || !modello.leggi_qr) return false;
+  try{
+    const im = canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
+    const code = jsQR(im.data, im.width, im.height, {inversionAttempts:'attemptBoth'});
+    if(code && code.data){ qrValue = pulisciQr(code.data); aggiornaQrBadge(); return true; }
+  }catch(e){ /* frame non leggibile: riprovo al prossimo */ }
+  return false;
+}
+function scanQRFromVideo(video){
+  // il QR si legge dal fotogramma INTERO (ovunque sia), disaccoppiato dal ritaglio d'analisi
+  if(typeof jsQR!=='function' || qrValue || !modello || !modello.leggi_qr || !video.videoWidth) return false;
+  const w=Math.min(1000, video.videoWidth), h=Math.round(video.videoHeight*w/video.videoWidth);
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  c.getContext('2d').drawImage(video,0,0,w,h);
+  return scanQRCanvas(c);
+}
+
+// Mappa la cornice-guida (frazioni del camArea mostrato) ai pixel del video, tenendo conto
+// di object-fit:cover (il video copre il box e l'eccesso viene ritagliato e centrato).
+function rettangoloVideo(video, fr){
+  const FRAME = fr;                              // mappo la cornice richiesta (intera o solo-riquadro)
+  const cam = $('.camArea');
+  const CW = cam.clientWidth, CH = cam.clientHeight;
+  const VW = video.videoWidth, VH = video.videoHeight;
+  const scale = Math.max(CW/VW, CH/VH);
+  const offX = (VW*scale - CW)/2, offY = (VH*scale - CH)/2;
+  return {
+    x: (FRAME.x*CW + offX)/scale, y: (FRAME.y*CH + offY)/scale,
+    w: (FRAME.w*CW)/scale,        h: (FRAME.h*CH)/scale
+  };
+}
+function apriDialogModelli(){
+  const d = $('#dlgModelli');
+  d.innerHTML = '<h3 style="margin-top:0">Scegli il modello</h3>' +
+    MODELLI.map(m=>`<button class="opt" data-id="${m.id}">${m.nome}</button>`).join('') +
+    '<button class="big" id="chiudiDlg" style="background:#374151">Annulla</button>';
+  d.querySelectorAll('.opt').forEach(b=> b.onclick=()=>{ setModello(MODELLI.find(x=>x.id===b.dataset.id)); d.close(); });
+  $('#chiudiDlg').onclick=()=>d.close();
+  d.showModal();
+}
+
+// fotocamera con guida (richiede contesto sicuro). Fallback: input file nativo.
+let stream=null;
+async function initCamera(){
+  // Nessun blocco di orientamento: funziona sia in verticale sia in orizzontale.
+  // La cornice-guida e il ritaglio si adattano da soli (applyFrame + rettangoloVideo).
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{
+      facingMode:'environment',
+      width:{ideal:1920},          // chiedo comunque buona risoluzione
+      height:{ideal:1080}
+    }});
+    $('#video').srcObject = stream;
+    $('#video').addEventListener('loadedmetadata', applyFrame);   // noto il rapporto reale della camera → ricalcolo
+    avviaAuto();                       // fotocamera viva: parte la sonda dell'auto-scansione
+  }catch(e){
+    // niente getUserMedia: passo allo scatto nativo, l'auto-scansione non e' disponibile
+    $('.camArea').classList.add('hidden');
+    $('#file').classList.remove('hidden');
+    $('#autoBtn').classList.add('hidden');
+    auto.on=false;
+  }
+}
+
+function ritagliaGuida(video){
+  // ritaglio la cornice-guida (= il riquadro) per l'analisi
+  const {x,y,w,h}=rettangoloVideo(video, FRAME);
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  c.getContext('2d').drawImage(video, x,y,w,h, 0,0,w,h);
+  return c;
+}
+
+function eseguiAnalisi(canvas){
+  canvas.toBlob(async (blob)=>{
+    canvasBlob = blob;
+    const fd=new FormData(); fd.append('foto',blob,'box.jpg'); fd.append('modello',modello.id);
+    const r = await (await fetch('/analizza',{method:'POST',body:fd})).json();
+    mostraVerifica(r);
+  },'image/jpeg',0.85);
+}
+
+async function cattura(){
+  if(!modello){ alert('Nessun modello calibrato'); return; }
+  fermaAuto();                                   // niente sonde mentre analizziamo/verifichiamo
+  let canvas;
+  if(stream){ canvas = ritagliaGuida($('#video')); scanQRFromVideo($('#video')); }   // analisi=solo riquadro; QR=frame intero
+  else if($('#file').files[0]){
+    const img = await createImageBitmap($('#file').files[0]);
+    canvas=document.createElement('canvas'); canvas.width=img.width; canvas.height=img.height;
+    canvas.getContext('2d').drawImage(img,0,0);
+    scanQRCanvas(canvas);                          // da file: cerco il QR su tutta l'immagine
+  } else { $('#file').click(); return; }
+  eseguiAnalisi(canvas);
+}
+$('#scatta').onclick = cattura;
+$('#file').onchange = cattura;
+
+// ---- Auto-scansione: sonda continua l'aggancio e scatta da sola quando e' stabile ----
+const POLL_MS=350, STABLE=3, ARM_BELOW=7;   // STABLE fotogrammi buoni di fila -> scatto; ARM_BELOW = "frame vuoto"
+let auto={on:true, busy:false, hits:0, armed:false, timer:null};
+
+function ritagliaGuidaProbe(video){
+  // come ritagliaGuida ma ridotto: la sonda misura l'aggancio sul riquadro
+  const {x,y,w,h}=rettangoloVideo(video, FRAME);
+  const scale=Math.min(1, 900/w), cw=Math.round(w*scale), ch=Math.round(h*scale);
+  const c=document.createElement('canvas'); c.width=cw; c.height=ch;
+  c.getContext('2d').drawImage(video, x,y,w,h, 0,0,cw,ch);
+  return c;
+}
+
+function setGuida(stato, info){
+  const g=$('.guide'), b=$('#badge');
+  g.classList.remove('vicino','lock','attesa');
+  if(!auto.on || !stream){ b.textContent = stream ? 'Auto OFF — usa "Scatta e analizza"' : ''; return; }
+  const n = info ? '  ('+info+')' : '';      // livello di aggancio, es. (14/18), utile per tarare
+  if(stato==='attesa'){ g.classList.add('attesa'); b.textContent='Togli la busta e metti la prossima…'; }
+  else if(stato==='lock'){ g.classList.add('lock'); b.textContent='Aggancio stabile — scansione…'+n; }
+  else if(stato==='vicino'){ g.classList.add('vicino'); b.textContent='Quasi… tieni fermo'+n; }
+  else { b.textContent='Inquadra il riquadro nella cornice'+n; }
+}
+
+function aggiornaStato(r){
+  const inl=r.inlier||0, ok=r.ok, info=inl+'/'+(r.soglia||'?');
+  if(!auto.armed){                         // dopo uno scatto aspetto che il frame torni "vuoto"
+    auto.hits=0;
+    if(inl < ARM_BELOW){ auto.armed=true; setGuida('pronto', info); }
+    else setGuida('attesa');
+    return;
+  }
+  if(ok){
+    auto.hits++; setGuida('lock', info);
+    if(auto.hits>=STABLE){ auto.hits=0; auto.armed=false; cattura(); }   // scatto automatico
+  }else{
+    auto.hits=0; setGuida(inl>=ARM_BELOW ? 'vicino' : 'pronto', info);
+  }
+}
+
+async function probe(){
+  if(!auto.on || auto.busy || !modello || !stream || document.hidden) return;
+  if($('#fase1').classList.contains('hidden')) return;     // siamo nella verifica: non sondare
+  const v=$('#video'); if(!v.videoWidth) return;
+  auto.busy=true;
+  try{
+    const c=ritagliaGuidaProbe(v);
+    scanQRFromVideo(v);                            // QR letto dal fotogramma intero (finché non riesce)
+    const blob=await new Promise(res=>c.toBlob(res,'image/jpeg',0.6));
+    const fd=new FormData(); fd.append('foto',blob,'p.jpg'); fd.append('modello',modello.id);
+    const r=await (await fetch('/aggancio',{method:'POST',body:fd})).json();
+    aggiornaStato(r);
+  }catch(e){ /* un giro a vuoto: riprovo al prossimo tick */ }
+  finally{ auto.busy=false; }
+}
+
+function avviaAuto(){
+  if(!stream) return;
+  fermaAuto();
+  auto.hits=0; auto.armed=false; auto.busy=false;   // riparte: serve un frame vuoto per riarmarsi
+  setGuida('attesa');
+  auto.timer=setInterval(probe, POLL_MS);
+}
+function fermaAuto(){ if(auto.timer){ clearInterval(auto.timer); auto.timer=null; } }
+
+$('#autoBtn').onclick = ()=>{
+  auto.on=!auto.on;
+  $('#autoBtn').textContent='Auto: '+(auto.on?'ON':'OFF');
+  $('#autoBtn').classList.toggle('off', !auto.on);
+  if(auto.on) avviaAuto(); else { fermaAuto(); setGuida('off'); }
+};
+
+function mostraVerifica(r){
+  $('#fase1').classList.add('hidden'); $('#fase2').classList.remove('hidden');
+  $('#prev').src = r.anteprima || '';
+  const av=$('#avviso');
+  if(r.avviso_coerenza){ av.textContent='⚠ '+r.avviso_coerenza; av.classList.remove('hidden'); }
+  else av.classList.add('hidden');
+
+  // codice raccomandata = QR letto (solo per i modelli che hanno un QR). Campo non editabile a mano:
+  // se non è stato letto durante l'inquadratura, si usa "Scansiona QR" senza toccare la scelta.
+  $('#codiceRow').classList.toggle('hidden', !modello.leggi_qr);
+  if(modello.leggi_qr) $('#codice').value = qrValue || '';
+
+  // griglia unica: destinatario a sinistra, indirizzo a destra (come sulla busta).
+  // pre-evidenzio la proposta, ma niente salvataggio automatico: conferma sempre richiesta.
+  scelta = r.proposta || null;
+  const cats={};
+  modello.caselle.forEach(c=> (cats[c.categoria]=cats[c.categoria]||[]).push(c));
+  const ordine = ['destinatario','indirizzo'].concat(Object.keys(cats).filter(c=>c!=='destinatario'&&c!=='indirizzo'));
+  const colonna = cat => !cats[cat] ? '' :
+    `<div class="col"><h4>${cat}</h4>` +
+      cats[cat].map(c=>{
+        const isProp = c.id===r.proposta;
+        return `<button class="opt ${isProp?'proposta sel':''}" data-id="${c.id}" data-et="${c.etichetta}">`+
+               `${c.etichetta.split(' - ').pop()}${isProp?' <span class="tag">●</span>':''}</button>`;
+      }).join('') + `</div>`;
+  $('#opzioni').innerHTML = '<div class="opzioni-grid">' + ordine.map(colonna).join('') + '</div>';
+  $('#opzioni').querySelectorAll('.opt').forEach(b=> b.onclick=()=>{
+    $('#opzioni').querySelectorAll('.opt').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel'); scelta=b.dataset.id;
+  });
+
+  // diagnostica: se NON c'è una proposta sicura, spiego perché (livello, aggancio, punteggi top)
+  const diag=$('#diag');
+  if(!r.proposta && r.punteggi){
+    const etich={}; modello.caselle.forEach(c=> etich[c.id]=c.etichetta.split(' - ').pop());
+    const top=Object.entries(r.punteggi).sort((a,b)=>b[1]-a[1]).slice(0,3)
+              .map(([id,v])=>`${etich[id]||id} ${v.toFixed(2)}`).join(' · ');
+    const motivo = r.livello==='nessuna' ? 'nessun segno abbastanza marcato'
+                 : 'segno trovato ma troppo vicino agli altri (margine insufficiente)';
+    diag.innerHTML = `Nessuna proposta sicura: <b>${motivo}</b>.<br>`+
+      `aggancio ${r.inlier} inlier · livello ${r.livello} · punteggi: ${top}<br>`+
+      `Tocca tu la casella giusta e conferma.`;
+    diag.classList.remove('hidden');
+  } else diag.classList.add('hidden');
+}
+
+$('#conferma').onclick = async ()=>{
+  if(!scelta){ alert('Seleziona una casella prima di confermare.'); return; }
+  const et = $('#opzioni').querySelector(`[data-id="${scelta}"]`).dataset.et;
+  await fetch('/salva',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({codice:$('#codice').value, modello:modello.id, casella_id:scelta, etichetta:et, qr:qrValue})});
+  toast(); reset();
+};
+$('#rifai').onclick = reset;
+
+function reset(){
+  $('#fase2').classList.add('hidden'); $('#fase1').classList.remove('hidden');
+  $('#codice').value=''; scelta=null; canvasBlob=null;
+  qrValue=''; aggiornaQrBadge();        // nuova busta: dimentico il QR letto e riprendo a scandire
+  if(auto.on) avviaAuto();             // riarma l'auto-scansione per la busta successiva
+}
+function toast(){ const t=$('#toast'); t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1200); }
+
+// ---- Scansione del SOLO codice QR (in verifica): riempie il codice raccomandata
+//      senza toccare la scelta del mancato recapito ----
+function impostaQr(val){ val=pulisciQr(val); qrValue=val; $('#codice').value=val; aggiornaQrBadge(); }
+let qrScanTimer=null;
+function openQrScan(){
+  if(typeof jsQR!=='function'){ alert('Lettore QR non disponibile.'); return; }
+  if(!stream){ $('#qrfile').click(); return; }   // niente camera: scelgo un'immagine del QR
+  const d=$('#dlgQr'), v=$('#qrvideo'), st=$('#qrStatus');
+  st.textContent='Inquadra il QR nel riquadro azzurro…';
+  v.srcObject=stream;                            // stesso stream della camera principale
+  d.showModal();
+  qrScanTimer=setInterval(()=>{
+    if(!v.videoWidth) return;
+    const w=Math.min(800, v.videoWidth), h=Math.round(v.videoHeight*w/v.videoWidth);
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const ctx=c.getContext('2d'); ctx.drawImage(v,0,0,w,h);
+    try{
+      const im=ctx.getImageData(0,0,w,h);
+      const code=jsQR(im.data, im.width, im.height, {inversionAttempts:'attemptBoth'});
+      if(code && code.data){ impostaQr(code.data); st.textContent='QR ✓ '+qrValue; setTimeout(closeQrScan,700); }
+    }catch(e){}
+  }, 150);
+}
+function closeQrScan(){
+  if(qrScanTimer){ clearInterval(qrScanTimer); qrScanTimer=null; }
+  $('#qrvideo').srcObject=null;                  // sgancio il video (NON fermo i track: servono alla camera)
+  const d=$('#dlgQr'); if(d.open) d.close();
+}
+$('#scanQrBtn').onclick = openQrScan;
+$('#qrAnnulla').onclick = closeQrScan;
+$('#dlgQr').addEventListener('close', closeQrScan);   // anche con Esc: ferma la sonda QR
+$('#qrfile').onchange = async ()=>{
+  const f=$('#qrfile').files[0]; if(!f) return;
+  const img=await createImageBitmap(f);
+  const c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
+  const ctx=c.getContext('2d'); ctx.drawImage(img,0,0);
+  try{
+    const im=ctx.getImageData(0,0,c.width,c.height);
+    const code=jsQR(im.data, im.width, im.height, {inversionAttempts:'attemptBoth'});
+    if(code && code.data) impostaQr(code.data); else alert('Nessun QR riconosciuto nell\'immagine.');
+  }catch(e){ alert('Immagine non leggibile.'); }
+  $('#qrfile').value='';
+};
+
+// la dimensione del camArea cambia con rotazione/resize: ricalcolo la cornice
+window.addEventListener('resize', applyFrame);
+window.addEventListener('orientationchange', ()=>setTimeout(applyFrame, 300));
+
+initModelli(); initCamera();
+</script>
+</body>
+</html>
