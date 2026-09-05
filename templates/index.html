@@ -2,14 +2,14 @@
 <html lang="it">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mancato recapito</title>
 <style>
   :root{ --bg:#0f1115; --card:#1a1d24; --line:#2b2f3a; --txt:#e8eaf0; --mut:#9aa0ad;
          --accent:#3b82f6; --ok:#16a34a; --warn:#d97706; }
   *{box-sizing:border-box}
   body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt);
-       height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+       height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
   header b{font-size:15px}
   #modelloBtn{background:#222634;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px}
@@ -19,23 +19,26 @@
   #fase1:not(.hidden){display:flex;flex-direction:column;gap:8px;flex:1;min-height:0}
   #fase2:not(.hidden){display:flex;flex-direction:column;gap:0;flex:1;min-height:0;overflow:auto}
   .camArea{position:relative;border-radius:14px;overflow:hidden;background:#000;flex:1;min-height:0;width:100%}
-  video,canvas,img.prev{width:100%;height:100%;object-fit:cover;display:block}
-  /* La cornice-guida si adatta alle proporzioni del modello scelto: i margini --fl/--ft
-     sono calcolati in JS dal rapporto del riferimento e dal rapporto reale della camera,
-     così la sagoma ghost non è mai distorta e il ritaglio inviato a /analizza non è deformato.
-     I fallback (12%/5%) valgono finché il JS non li ricalcola. */
+  video{width:100%;height:100%;object-fit:contain;display:block;background:#000}
+  canvas,img.prev{width:100%;height:100%;object-fit:contain;display:block}
+  /* La cornice-guida si adatta alle proporzioni del modello scelto: --fx/--fy/--fw/--fh
+     sono calcolati in JS in PIXEL sopra il rettangolo realmente occupato dal fotogramma,
+     così la sagoma non è mai distorta e la cornice che si vede è esattamente il ritaglio
+     inviato a /analizza. I fallback in percentuale valgono finché il JS non li ricalcola. */
   /* la sagoma riempie ESATTAMENTE la cornice: contenitore dimensionato dai margini, img al 100%.
      (un <img> assoluto con width:auto userebbe la dimensione naturale, ignorando right/bottom) */
-  .ghostbox{position:absolute;left:var(--fl,12%);right:var(--fl,12%);top:var(--ft,5%);bottom:var(--ft,5%);pointer-events:none}
+  .ghostbox{position:absolute;left:var(--fx,10%);top:var(--fy,20%);width:var(--fw,80%);height:var(--fh,60%);pointer-events:none}
   .ghostbox img{width:100%;height:100%;object-fit:fill;opacity:.32;border-radius:12px;display:block}
   .guide{position:absolute;inset:0;pointer-events:none}
-  .guide div.cornice{position:absolute;left:var(--fl,12%);right:var(--fl,12%);top:var(--ft,5%);bottom:var(--ft,5%);border:3px dashed rgba(255,255,255,.85);border-radius:12px;transition:border-color .15s,box-shadow .15s}
+  .guide div.cornice{position:absolute;left:var(--fx,10%);top:var(--fy,20%);width:var(--fw,80%);height:var(--fh,60%);
+                     border:3px dashed rgba(255,255,255,.85);border-radius:12px;box-sizing:content-box;margin:-3px;
+                     transition:border-color .15s,box-shadow .15s}
   .guide.vicino div.cornice{border-color:#f59e0b}
   .guide.lock div.cornice{border-color:#22c55e;border-style:solid;box-shadow:0 0 0 9999px rgba(34,197,94,.07) inset}
   .guide.attesa div.cornice{border-color:#6b7280}
   .badge{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;padding:6px 12px;border-radius:20px;font-size:13px;white-space:nowrap}
   /* badge stato QR (il QR si legge dal fotogramma intero) */
-  #qrbadge{position:absolute;left:50%;top:var(--ft,5%);transform:translate(-50%,6px);background:rgba(0,0,0,.55);color:#cfe3ff;padding:4px 11px;border-radius:14px;font-size:12px;white-space:nowrap;pointer-events:none;max-width:80%;overflow:hidden;text-overflow:ellipsis}
+  #qrbadge{position:absolute;left:50%;top:var(--fy,20%);transform:translate(-50%,6px);background:rgba(0,0,0,.55);color:#cfe3ff;padding:4px 11px;border-radius:14px;font-size:12px;white-space:nowrap;pointer-events:none;max-width:80%;overflow:hidden;text-overflow:ellipsis}
   #qrbadge.ok{background:rgba(22,163,74,.85);color:#fff}
   #autoBtn{margin-left:auto;background:#16233b;color:var(--txt);border:1px solid var(--accent);border-radius:10px;padding:8px 12px;font-size:14px}
   #autoBtn.off{background:#222634;border-color:var(--line);color:var(--mut)}
@@ -43,6 +46,10 @@
   button.big{width:100%;border:0;border-radius:12px;padding:16px;font-size:17px;font-weight:600;color:#fff;background:var(--accent);margin-top:12px}
   button.big:active{filter:brightness(.9)}
   .codice{width:100%;margin-top:12px;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--txt);font-size:16px}
+  .banner{background:#3a2a12;border:1px solid var(--warn);color:#f5c878;padding:10px 12px;border-radius:10px;
+          margin:0 0 8px;font-size:13px;line-height:1.45;flex:none}
+  .banner b{color:#ffd89a}
+  .banner.err{background:#3a1616;border-color:#dc2626;color:#fca5a5}
   .avviso{background:#3a2a12;border:1px solid var(--warn);color:#f5c878;padding:10px 12px;border-radius:10px;margin-top:12px;font-size:14px}
   .grp{margin-top:16px}
   .grp h4{margin:0 0 8px;color:var(--mut);font-size:13px;text-transform:uppercase;letter-spacing:.04em}
@@ -91,6 +98,7 @@
 <div class="wrap">
   <!-- FASE 1: acquisizione -->
   <div id="fase1">
+    <div id="statoCam" class="banner hidden"></div>
     <div class="camArea">
       <video id="video" autoplay playsinline muted></video>
       <div class="ghostbox"><img id="ghost" alt=""></div>
@@ -132,7 +140,10 @@
 <script src="/static/jsQR.js"></script>
 <script>
 let MODELLI = [], modello = null, scelta = null, canvasBlob = null, qrValue = '';
-let FRAME = {x:0.12, y:0.05, w:0.76, h:0.90};    // cornice-guida = il riquadro (ciò che si inquadra e si analizza)
+// Cornice-guida espressa in FRAZIONI DEL FOTOGRAMMA (non del riquadro a schermo): è
+// esattamente la porzione di video che viene ritagliata e mandata ad analizzare, quindi
+// ciò che l'operatore vede dentro la cornice è ciò che il server riceve.
+let FRAME = {x:0.05, y:0.25, w:0.90, h:0.50};
 
 const $ = s => document.querySelector(s);
 
@@ -146,29 +157,51 @@ function setModello(m){
   $('#modelloBtn').textContent = 'Modello: ' + m.nome;
   const g = $('#ghost');
   g.onload = applyFrame;                         // appena arriva il riferimento ne conosco il rapporto
+  g.onerror = ()=>{ g.removeAttribute('src'); applyFrame(); };   // senza sagoma la cornice usa comunque il rapporto del modello
   g.src = '/riferimento/' + m.id;                // sagoma-guida del modello scelto
 }
 
-// Cornice-guida del rapporto del modello scelto, centrata nel riquadro mostrato a schermo.
-// NB: il video riempie il camArea con object-fit:cover (può avere orientamento diverso, es.
-// frame verticale su telefono in orizzontale): la corrispondenza cornice↔ritaglio è gestita
-// in rettangoloVideo(), che tiene conto del cover-crop. Le frazioni FRAME sono % del camArea.
+// Rettangolo (in px del riquadro a schermo) realmente occupato dal fotogramma: con
+// object-fit:contain il video è interamente visibile e nessuna parte del sensore va persa,
+// così la cornice può mappare tutta la larghezza disponibile invece di ~un terzo.
+function rettVideo(){
+  const cam = $('.camArea'), v = $('#video');
+  const CW = cam.clientWidth, CH = cam.clientHeight, VW = v.videoWidth, VH = v.videoHeight;
+  if(!CW || !CH || !VW || !VH) return null;
+  const s = Math.min(CW/VW, CH/VH);
+  return {x:(CW - VW*s)/2, y:(CH - VH*s)/2, w:VW*s, h:VH*s, s};
+}
+
+// Cornice-guida con il rapporto del modello scelto, iscritta nel fotogramma e disegnata
+// esattamente sopra la porzione di video corrispondente. FRAME è in frazioni del fotogramma:
+// una sola grandezza descrive sia ciò che si vede sia ciò che si ritaglia, e le due non
+// possono più divergere.
 function applyFrame(){
-  const g = $('#ghost'), cam = $('.camArea');
-  const CW = cam.clientWidth, CH = cam.clientHeight;
-  if(!CW || !CH) return;
-  const boxRatio = (g.naturalWidth && g.naturalHeight) ? g.naturalWidth/g.naturalHeight : 1.5;
-  const ratioCam = CW / CH;                       // rapporto del riquadro come è mostrato
-  const rel = boxRatio / ratioCam;                // la cornice = il riquadro (niente banda)
+  const g = $('#ghost'), v = $('#video');
+  const rv = rettVideo();
+  if(!rv){ return; }
+  const modRatio = rapportoModello();
+  const boxRatio = (g.naturalWidth && g.naturalHeight) ? g.naturalWidth/g.naturalHeight : modRatio;
+  const rel = boxRatio / (v.videoWidth / v.videoHeight);
   let fw, fh;
-  if(rel >= 1){ fw = 0.90; fh = 0.90/rel; }
-  else        { fh = 0.90; fw = 0.90*rel; }
+  if(rel >= 1){ fw = 0.94; fh = 0.94/rel; }
+  else        { fh = 0.94; fw = 0.94*rel; }
   FRAME = {x:(1-fw)/2, y:(1-fh)/2, w:fw, h:fh};
+
   const root = document.documentElement.style;
-  root.setProperty('--fl', (FRAME.x*100).toFixed(2)+'%');
-  root.setProperty('--ft', (FRAME.y*100).toFixed(2)+'%');
+  root.setProperty('--fx', (rv.x + FRAME.x*rv.w).toFixed(1)+'px');
+  root.setProperty('--fy', (rv.y + FRAME.y*rv.h).toFixed(1)+'px');
+  root.setProperty('--fw', (FRAME.w*rv.w).toFixed(1)+'px');
+  root.setProperty('--fh', (FRAME.h*rv.h).toFixed(1)+'px');
   // il QR si legge dal fotogramma intero (vedi scanQRFromVideo): mostro il badge se il modello lo prevede
   $('#qrbadge').classList.toggle('hidden', !(modello && modello.leggi_qr) || !stream);
+}
+
+// Rapporto del riquadro del modello, noto anche prima che la sagoma sia scaricata: senza
+// questo la cornice nasceva con un rapporto arbitrario e il ritaglio partiva deformato.
+function rapportoModello(){
+  const d = modello && modello.dim_riferimento;
+  return (d && d[0] && d[1]) ? d[0]/d[1] : 2.25;
 }
 
 // ---- Lettura QR (jsQR, lato client): robusta a riflesso/posizione, prova molti fotogrammi ----
@@ -187,7 +220,7 @@ function scanQRCanvas(canvas){
   // scandisce solo se il modello prevede il QR e non l'ho già letto per questa busta
   if(typeof jsQR!=='function' || qrValue || !modello || !modello.leggi_qr) return false;
   try{
-    const im = canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
+    const im = canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,canvas.width,canvas.height);
     const code = jsQR(im.data, im.width, im.height, {inversionAttempts:'attemptBoth'});
     if(code && code.data){ qrValue = pulisciQr(code.data); aggiornaQrBadge(); return true; }
   }catch(e){ /* frame non leggibile: riprovo al prossimo */ }
@@ -198,23 +231,14 @@ function scanQRFromVideo(video){
   if(typeof jsQR!=='function' || qrValue || !modello || !modello.leggi_qr || !video.videoWidth) return false;
   const w=Math.min(1000, video.videoWidth), h=Math.round(video.videoHeight*w/video.videoWidth);
   const c=document.createElement('canvas'); c.width=w; c.height=h;
-  c.getContext('2d').drawImage(video,0,0,w,h);
+  c.getContext('2d',{willReadFrequently:true}).drawImage(video,0,0,w,h);
   return scanQRCanvas(c);
 }
 
-// Mappa la cornice-guida (frazioni del camArea mostrato) ai pixel del video, tenendo conto
-// di object-fit:cover (il video copre il box e l'eccesso viene ritagliato e centrato).
+// La cornice è già in frazioni del fotogramma: passare ai pixel del video è una moltiplicazione.
 function rettangoloVideo(video, fr){
-  const FRAME = fr;                              // mappo la cornice richiesta (intera o solo-riquadro)
-  const cam = $('.camArea');
-  const CW = cam.clientWidth, CH = cam.clientHeight;
-  const VW = video.videoWidth, VH = video.videoHeight;
-  const scale = Math.max(CW/VW, CH/VH);
-  const offX = (VW*scale - CW)/2, offY = (VH*scale - CH)/2;
-  return {
-    x: (FRAME.x*CW + offX)/scale, y: (FRAME.y*CH + offY)/scale,
-    w: (FRAME.w*CW)/scale,        h: (FRAME.h*CH)/scale
-  };
+  return {x: fr.x*video.videoWidth,  y: fr.y*video.videoHeight,
+          w: fr.w*video.videoWidth,  h: fr.h*video.videoHeight};
 }
 function apriDialogModelli(){
   const d = $('#dlgModelli');
@@ -228,54 +252,119 @@ function apriDialogModelli(){
 
 // fotocamera con guida (richiede contesto sicuro). Fallback: input file nativo.
 let stream=null;
+function banner(html, errore){
+  const b=$('#statoCam');
+  if(!html){ b.classList.add('hidden'); return; }
+  b.innerHTML=html; b.classList.toggle('err', !!errore); b.classList.remove('hidden');
+}
+
+function modalitaRidotta(motivo){
+  // Niente fotocamera con guida: si scatta con la fotocamera nativa. Funziona, ma senza
+  // sagoma e senza auto-scatto. Prima questo avveniva in silenzio e l'operatore non poteva
+  // sapere perché l'app si comportava in modo diverso: ora lo diciamo, con il rimedio.
+  $('.camArea').classList.add('hidden');
+  $('#file').classList.remove('hidden');
+  $('#autoBtn').classList.add('hidden');
+  auto.on=false; fermaAuto();
+  $('#scatta').textContent='Scegli o scatta la foto';
+  const https = location.protocol==='https:';
+  banner('<b>Modalità ridotta:</b> '+motivo+'<br>Si scatta a mano, senza sagoma e senza scatto automatico.'+
+         (https ? '' : ' Il browser concede la fotocamera solo in <b>HTTPS</b>: riavvia il server con <b>--https</b> e riapri la pagina in https://'), true);
+}
+
 async function initCamera(){
   // Nessun blocco di orientamento: funziona sia in verticale sia in orizzontale.
   // La cornice-guida e il ritaglio si adattano da soli (applyFrame + rettangoloVideo).
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    modalitaRidotta(window.isSecureContext===false
+      ? 'la pagina non è in un contesto sicuro, quindi il browser non espone la fotocamera.'
+      : 'questo browser non espone la fotocamera alle pagine web.');
+    return;
+  }
   try{
     stream = await navigator.mediaDevices.getUserMedia({video:{
-      facingMode:'environment',
+      facingMode:{ideal:'environment'},
       width:{ideal:1920},          // chiedo comunque buona risoluzione
-      height:{ideal:1080}
+      height:{ideal:1080},
+      // su Android senza questi il fotogramma arriva spesso molle o riscalato da un formato
+      // più piccolo; sono "advanced", quindi vengono ignorati dove non sono supportati
+      advanced:[{focusMode:'continuous'},{resizeMode:'none'}]
     }});
     $('#video').srcObject = stream;
     $('#video').addEventListener('loadedmetadata', applyFrame);   // noto il rapporto reale della camera → ricalcolo
+    // se un'altra app si prende la fotocamera il video si congela: senza questo l'auto-scatto
+    // continuerebbe ad analizzare un fotogramma morto
+    stream.getVideoTracks().forEach(t=>{
+      t.addEventListener('ended', ()=>modalitaRidotta('la fotocamera è stata chiusa da un\'altra app.'));
+      t.addEventListener('mute', ()=>banner('Fotocamera momentaneamente sospesa…', true));
+      t.addEventListener('unmute', ()=>banner(''));
+    });
+    banner('');
     avviaAuto();                       // fotocamera viva: parte la sonda dell'auto-scansione
   }catch(e){
-    // niente getUserMedia: passo allo scatto nativo, l'auto-scansione non e' disponibile
-    $('.camArea').classList.add('hidden');
-    $('#file').classList.remove('hidden');
-    $('#autoBtn').classList.add('hidden');
-    auto.on=false;
+    const nome=(e && e.name)||'';
+    modalitaRidotta(
+      nome==='NotAllowedError' ? 'il permesso della fotocamera è stato negato.' :
+      nome==='NotFoundError'   ? 'nessuna fotocamera disponibile.' :
+      nome==='NotReadableError'? 'la fotocamera è occupata da un\'altra app.' :
+      'la fotocamera non è disponibile ('+(nome||'errore sconosciuto')+').');
   }
 }
 
 function ritagliaGuida(video){
   // ritaglio la cornice-guida (= il riquadro) per l'analisi
-  const {x,y,w,h}=rettangoloVideo(video, FRAME);
+  const r=rettangoloVideo(video, FRAME);
+  const w=Math.max(1,Math.round(r.w)), h=Math.max(1,Math.round(r.h));
   const c=document.createElement('canvas'); c.width=w; c.height=h;
-  c.getContext('2d').drawImage(video, x,y,w,h, 0,0,w,h);
+  c.getContext('2d').drawImage(video, r.x,r.y,r.w,r.h, 0,0,w,h);
   return c;
 }
 
 function eseguiAnalisi(canvas){
   canvas.toBlob(async (blob)=>{
+    if(!blob){ erroreAcquisizione('Fotogramma non valido, riprova.'); return; }
     canvasBlob = blob;
-    const fd=new FormData(); fd.append('foto',blob,'box.jpg'); fd.append('modello',modello.id);
-    const r = await (await fetch('/analizza',{method:'POST',body:fd})).json();
-    mostraVerifica(r);
+    try{
+      const fd=new FormData(); fd.append('foto',blob,'box.jpg'); fd.append('modello',modello.id);
+      const resp = await fetch('/analizza',{method:'POST',body:fd});
+      const r = await resp.json().catch(()=>({}));
+      if(!resp.ok){ erroreAcquisizione(r.errore || ('Errore del server ('+resp.status+').')); return; }
+      mostraVerifica(r);
+    }catch(e){
+      // senza questo un errore di rete lasciava l'app viva ma ferma: sonda spenta,
+      // nessun messaggio e il pulsante apparentemente morto
+      erroreAcquisizione('Server non raggiungibile. Controlla la connessione.');
+    }
   },'image/jpeg',0.85);
 }
 
+function erroreAcquisizione(msg){
+  banner('<b>Analisi non riuscita:</b> '+msg, true);
+  $('#fase2').classList.add('hidden'); $('#fase1').classList.remove('hidden');
+  if(auto.on) avviaAuto();               // si riparte, invece di restare bloccati
+}
+
 async function cattura(){
-  if(!modello){ alert('Nessun modello calibrato'); return; }
+  if(!modello){ banner('Nessun modello calibrato: controlla la cartella modelli/.', true); return; }
   fermaAuto();                                   // niente sonde mentre analizziamo/verifichiamo
   let canvas;
-  if(stream){ canvas = ritagliaGuida($('#video')); scanQRFromVideo($('#video')); }   // analisi=solo riquadro; QR=frame intero
+  if(stream){
+    const v=$('#video');
+    if(!v.videoWidth){ banner('La fotocamera non è ancora pronta, riprova fra un istante.', true);
+                       if(auto.on) avviaAuto(); return; }
+    canvas = ritagliaGuida(v); scanQRFromVideo(v);   // analisi=solo riquadro; QR=frame intero
+  }
   else if($('#file').files[0]){
-    const img = await createImageBitmap($('#file').files[0]);
+    let img;
+    try{
+      // imageOrientation: senza questo la foto della fotocamera nativa arriva ruotata
+      // rispetto a come l'operatore la vede
+      img = await createImageBitmap($('#file').files[0], {imageOrientation:'from-image'});
+    }catch(e){ banner('Immagine non leggibile.', true); return; }
     canvas=document.createElement('canvas'); canvas.width=img.width; canvas.height=img.height;
-    canvas.getContext('2d').drawImage(img,0,0);
+    canvas.getContext('2d',{willReadFrequently:true}).drawImage(img,0,0);
     scanQRCanvas(canvas);                          // da file: cerco il QR su tutta l'immagine
+    $('#file').value='';                           // senza questo il prossimo scatto rianalizza questa foto
   } else { $('#file').click(); return; }
   eseguiAnalisi(canvas);
 }
@@ -283,15 +372,22 @@ $('#scatta').onclick = cattura;
 $('#file').onchange = cattura;
 
 // ---- Auto-scansione: sonda continua l'aggancio e scatta da sola quando e' stabile ----
-const POLL_MS=350, STABLE=3, ARM_BELOW=7;   // STABLE fotogrammi buoni di fila -> scatto; ARM_BELOW = "frame vuoto"
-let auto={on:true, busy:false, hits:0, armed:false, timer:null};
+// STABLE fotogrammi buoni di fila -> scatto. Il riarmo ("è arrivata una busta nuova") è
+// espresso come FRAZIONE della soglia comunicata dal server, non come numero fisso: così
+// resta valido se la soglia cambia, e non capita più che con un foglio stampato qualsiasi
+// davanti all'obiettivo l'auto-scatto non si riarmi mai.
+const POLL_MS=350, STABLE=3, ARM_FRAZ=0.35;
+let auto={on:true, busy:false, hits:0, armed:false, timer:null, giro:0, errori:0};
 
 function ritagliaGuidaProbe(video){
-  // come ritagliaGuida ma ridotto: la sonda misura l'aggancio sul riquadro
-  const {x,y,w,h}=rettangoloVideo(video, FRAME);
-  const scale=Math.min(1, 900/w), cw=Math.round(w*scale), ch=Math.round(h*scale);
+  // come ritagliaGuida ma ridotto: la sonda misura l'aggancio sul riquadro.
+  // Il server normalizza la scala prima di agganciare, quindi la misura della sonda e quella
+  // dell'analisi sono confrontabili anche se le risoluzioni differiscono.
+  const r=rettangoloVideo(video, FRAME);
+  const scale=Math.min(1, 900/Math.max(1,r.w));
+  const cw=Math.max(1,Math.round(r.w*scale)), ch=Math.max(1,Math.round(r.h*scale));
   const c=document.createElement('canvas'); c.width=cw; c.height=ch;
-  c.getContext('2d').drawImage(video, x,y,w,h, 0,0,cw,ch);
+  c.getContext('2d').drawImage(video, r.x,r.y,r.w,r.h, 0,0,cw,ch);
   return c;
 }
 
@@ -307,10 +403,11 @@ function setGuida(stato, info){
 }
 
 function aggiornaStato(r){
-  const inl=r.inlier||0, ok=r.ok, info=inl+'/'+(r.soglia||'?');
+  const inl=r.inlier||0, ok=r.ok, soglia=r.soglia||1, info=inl+'/'+soglia;
+  const armaSotto=Math.max(3, Math.round(soglia*ARM_FRAZ));
   if(!auto.armed){                         // dopo uno scatto aspetto che il frame torni "vuoto"
     auto.hits=0;
-    if(inl < ARM_BELOW){ auto.armed=true; setGuida('pronto', info); }
+    if(inl < armaSotto){ auto.armed=true; setGuida('pronto', info); }
     else setGuida('attesa');
     return;
   }
@@ -318,7 +415,7 @@ function aggiornaStato(r){
     auto.hits++; setGuida('lock', info);
     if(auto.hits>=STABLE){ auto.hits=0; auto.armed=false; cattura(); }   // scatto automatico
   }else{
-    auto.hits=0; setGuida(inl>=ARM_BELOW ? 'vicino' : 'pronto', info);
+    auto.hits=0; setGuida(inl>=armaSotto ? 'vicino' : 'pronto', info);
   }
 }
 
@@ -327,14 +424,27 @@ async function probe(){
   if($('#fase1').classList.contains('hidden')) return;     // siamo nella verifica: non sondare
   const v=$('#video'); if(!v.videoWidth) return;
   auto.busy=true;
+  const giro=auto.giro;                            // marca il ciclo a cui appartiene questa sonda
   try{
     const c=ritagliaGuidaProbe(v);
     scanQRFromVideo(v);                            // QR letto dal fotogramma intero (finché non riesce)
     const blob=await new Promise(res=>c.toBlob(res,'image/jpeg',0.6));
+    if(!blob) return;
     const fd=new FormData(); fd.append('foto',blob,'p.jpg'); fd.append('modello',modello.id);
-    const r=await (await fetch('/aggancio',{method:'POST',body:fd})).json();
+    const resp=await fetch('/aggancio',{method:'POST',body:fd});
+    const r=await resp.json().catch(()=>null);
+    // Una risposta arrivata in ritardo appartiene a un ciclo già chiuso: agire su di essa
+    // faceva scattare una foto durante la verifica, cancellando la scelta dell'operatore.
+    if(giro!==auto.giro || $('#fase1').classList.contains('hidden')) return;
+    if(!r || !resp.ok){ throw new Error('aggancio'); }
+    auto.errori=0; banner('');
     aggiornaStato(r);
-  }catch(e){ /* un giro a vuoto: riprovo al prossimo tick */ }
+  }catch(e){
+    // il catch non è più muto: se il server smette di rispondere l'operatore deve saperlo,
+    // altrimenti resta davanti a una cornice grigia che non spiega nulla
+    if(++auto.errori===5) banner('Il server non risponde: lo scatto automatico è fermo. '+
+                                 'Puoi comunque usare <b>Scatta e analizza</b>.', true);
+  }
   finally{ auto.busy=false; }
 }
 
@@ -343,9 +453,10 @@ function avviaAuto(){
   fermaAuto();
   auto.hits=0; auto.armed=false; auto.busy=false;   // riparte: serve un frame vuoto per riarmarsi
   setGuida('attesa');
+  applyFrame();                                     // il layout può essere cambiato mentre eravamo in verifica
   auto.timer=setInterval(probe, POLL_MS);
 }
-function fermaAuto(){ if(auto.timer){ clearInterval(auto.timer); auto.timer=null; } }
+function fermaAuto(){ auto.giro++; if(auto.timer){ clearInterval(auto.timer); auto.timer=null; } }
 
 $('#autoBtn').onclick = ()=>{
   auto.on=!auto.on;
@@ -387,14 +498,19 @@ function mostraVerifica(r){
 
   // diagnostica: se NON c'è una proposta sicura, spiego perché (livello, aggancio, punteggi top)
   const diag=$('#diag');
-  if(!r.proposta && r.punteggi){
+  if(!r.proposta && r.punteggi && Object.keys(r.punteggi).length){
     const etich={}; modello.caselle.forEach(c=> etich[c.id]=c.etichetta.split(' - ').pop());
-    const top=Object.entries(r.punteggi).sort((a,b)=>b[1]-a[1]).slice(0,3)
-              .map(([id,v])=>`${etich[id]||id} ${v.toFixed(2)}`).join(' · ');
-    const motivo = r.livello==='nessuna' ? 'nessun segno abbastanza marcato'
-                 : 'segno trovato ma troppo vicino agli altri (margine insufficiente)';
+    const ord=Object.entries(r.punteggi).sort((a,b)=>b[1]-a[1]);
+    const top=ord.slice(0,3).map(([id,v])=>`${etich[id]||id} ${v.toFixed(2)}`).join(' · ');
+    const forti=ord.filter(([,v])=>v>=0.10).length;
+    const motivo = forti>1 ? 'più caselle sembrano barrate'
+                 : r.livello==='nessuna' ? 'nessun segno abbastanza marcato'
+                 : 'segno trovato ma troppo vicino agli altri';
+    let extra='';
+    if(r.residuo!=null && r.residuo>2.5) extra+=' · allineamento impreciso ('+r.residuo+' px)';
+    if(r.illeggibili && r.illeggibili.length) extra+=' · '+r.illeggibili.length+' caselle non leggibili';
     diag.innerHTML = `Nessuna proposta sicura: <b>${motivo}</b>.<br>`+
-      `aggancio ${r.inlier} inlier · livello ${r.livello} · punteggi: ${top}<br>`+
+      `aggancio ${r.inlier} riscontri${extra} · punteggi: ${top}<br>`+
       `Tocca tu la casella giusta e conferma.`;
     diag.classList.remove('hidden');
   } else diag.classList.add('hidden');
@@ -403,9 +519,18 @@ function mostraVerifica(r){
 $('#conferma').onclick = async ()=>{
   if(!scelta){ alert('Seleziona una casella prima di confermare.'); return; }
   const et = $('#opzioni').querySelector(`[data-id="${scelta}"]`).dataset.et;
-  await fetch('/salva',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({codice:$('#codice').value, modello:modello.id, casella_id:scelta, etichetta:et, qr:qrValue})});
-  toast(); reset();
+  const btn=$('#conferma'); btn.disabled=true;
+  try{
+    const resp = await fetch('/salva',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({codice:$('#codice').value, modello:modello.id, casella_id:scelta, etichetta:et, qr:qrValue})});
+    const r = await resp.json().catch(()=>({}));
+    // il toast "Salvato ✓" prima compariva anche quando il salvataggio falliva, e il dato
+    // era perso senza che nessuno lo sapesse
+    if(!resp.ok || !r.ok){ alert('NON salvato: '+(r.errore||('errore '+resp.status))+'\nRiprova.'); return; }
+    toast(); reset();
+  }catch(e){
+    alert('NON salvato: server non raggiungibile.\nRiprova senza chiudere la pagina.');
+  }finally{ btn.disabled=false; }
 };
 $('#rifai').onclick = reset;
 
@@ -413,6 +538,9 @@ function reset(){
   $('#fase2').classList.add('hidden'); $('#fase1').classList.remove('hidden');
   $('#codice').value=''; scelta=null; canvasBlob=null;
   qrValue=''; aggiornaQrBadge();        // nuova busta: dimentico il QR letto e riprendo a scandire
+  // la cornice va ricalcolata qui: mentre eravamo in verifica il riquadro della camera aveva
+  // dimensione zero, e una rotazione dello schermo l'avrebbe lasciata tarata sul layout vecchio
+  applyFrame();
   if(auto.on) avviaAuto();             // riarma l'auto-scansione per la busta successiva
 }
 function toast(){ const t=$('#toast'); t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1200); }
@@ -432,7 +560,7 @@ function openQrScan(){
     if(!v.videoWidth) return;
     const w=Math.min(800, v.videoWidth), h=Math.round(v.videoHeight*w/v.videoWidth);
     const c=document.createElement('canvas'); c.width=w; c.height=h;
-    const ctx=c.getContext('2d'); ctx.drawImage(v,0,0,w,h);
+    const ctx=c.getContext('2d',{willReadFrequently:true}); ctx.drawImage(v,0,0,w,h);
     try{
       const im=ctx.getImageData(0,0,w,h);
       const code=jsQR(im.data, im.width, im.height, {inversionAttempts:'attemptBoth'});
@@ -452,7 +580,7 @@ $('#qrfile').onchange = async ()=>{
   const f=$('#qrfile').files[0]; if(!f) return;
   const img=await createImageBitmap(f);
   const c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
-  const ctx=c.getContext('2d'); ctx.drawImage(img,0,0);
+  const ctx=c.getContext('2d',{willReadFrequently:true}); ctx.drawImage(img,0,0);
   try{
     const im=ctx.getImageData(0,0,c.width,c.height);
     const code=jsQR(im.data, im.width, im.height, {inversionAttempts:'attemptBoth'});

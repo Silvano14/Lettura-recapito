@@ -7,67 +7,66 @@
       "id": "dest_irreperibile",
       "categoria": "destinatario",
       "etichetta": "Destinatario - Irreperibile",
-      "x": 0.062,
-      "y": 0.388
+      "x": 0.0621,
+      "y": 0.3923
     },
     {
       "id": "dest_invio_rifiutato",
       "categoria": "destinatario",
       "etichetta": "Destinatario - Invio rifiutato",
-      "x": 0.062,
-      "y": 0.507
+      "x": 0.0617,
+      "y": 0.514
     },
     {
       "id": "dest_sconosciuto",
       "categoria": "destinatario",
       "etichetta": "Destinatario - Sconosciuto",
-      "x": 0.062,
-      "y": 0.625
+      "x": 0.0608,
+      "y": 0.6348
     },
     {
       "id": "dest_trasferito",
       "categoria": "destinatario",
       "etichetta": "Destinatario - Trasferito",
-      "x": 0.062,
-      "y": 0.747
+      "x": 0.06,
+      "y": 0.7556
     },
     {
       "id": "ind_inesatto",
       "categoria": "indirizzo",
       "etichetta": "Indirizzo - Inesatto",
-      "x": 0.422,
-      "y": 0.388
+      "x": 0.4221,
+      "y": 0.3886
     },
     {
       "id": "ind_inesistente",
       "categoria": "indirizzo",
       "etichetta": "Indirizzo - Inesistente",
-      "x": 0.422,
-      "y": 0.507
+      "x": 0.4221,
+      "y": 0.5084
     },
     {
       "id": "ind_insufficiente",
       "categoria": "indirizzo",
       "etichetta": "Indirizzo - Insufficiente",
-      "x": 0.422,
-      "y": 0.625
+      "x": 0.4217,
+      "y": 0.6273
     },
     {
       "id": "ind_altro",
       "categoria": "indirizzo",
       "etichetta": "Indirizzo - Altro",
-      "x": 0.422,
-      "y": 0.747
+      "x": 0.4217,
+      "y": 0.7481
     }
   ],
-  "riferimento": "sd24c6_ref.png",
+  "riferimento": "sd24c6_modulo.png",
   "dim_riferimento": [
-    600,
-    267
+    1200,
+    534
   ],
-  "template": "sd24c6_tpl.png",
-  "win_w": 0.022,
-  "win_h": 0.041,
-  "abs_min": 0.04,
-  "leggi_qr": true
+  "template": "sd24c6_modulo.png",
+  "leggi_qr": true,
+  "cella_w": 0.0371,
+  "cella_h": 0.0768
 }
