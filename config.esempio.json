@@ -1,0 +1,15 @@
+{
+  "mysql": {
+    "_nota": "Copia questo file in config.json (non versionato) e compila i valori. Caratteri speciali nella password vanno codificati: @ -> %40, : -> %3A, / -> %2F, # -> %23, % -> %25. In 'colonne': a sinistra il dato dell'app, a destra la colonna della tabella esistente; togli una riga per non salvare quel dato. Controllo: python verifica_mysql.py",
+    "connessione": "mysql://utente:password@192.168.1.10:3306/nome_database",
+    "tabella": "recapiti",
+    "colonne": {
+      "ts": "ts",
+      "codice": "codice",
+      "modello": "modello",
+      "casella_id": "casella_id",
+      "etichetta": "etichetta",
+      "qr": "qr"
+    }
+  }
+}

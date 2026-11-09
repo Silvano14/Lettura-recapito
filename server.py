@@ -11,24 +11,28 @@ La fotocamera del telefono (getUserMedia, per avere la guida sovrapposta) richie
 contesto sicuro: usa --https oppure apri da localhost. In alternativa l'interfaccia
 ripiega sullo scatto con la fotocamera nativa (senza guida) e lo DICE all'operatore.
 
+Salvataggio: con config.json (sezione "mysql", vedi config.esempio.json; serve pip install pymysql)
+i recapiti vanno su MySQL, con coda locale se il database non risponde; senza, in recapiti.db.
+Dettagli in archivio.py.
+
 Endpoint:
     GET  /              pagina di acquisizione (mobile)
     GET  /modelli       elenco dei modelli calibrati disponibili
     GET  /riferimento/<id>  immagine di riferimento del modello (sagoma-guida sulla camera)
     POST /analizza      form-data: foto=<jpg>, modello=<id>  -> JSON proposta+caselle+anteprima
     POST /aggancio      form-data: foto=<jpg>, modello=<id>  -> JSON {inlier, ok}  (sonda auto-scansione)
-    POST /salva         JSON: {codice, modello, casella_id, etichetta}  -> registra a DB
+    POST /salva         JSON: {codice, modello, casella_id, etichetta, qr}  -> registra (archivio.py)
 """
 import argparse, base64, datetime, glob, json, logging, os, sqlite3
 import cv2
 import numpy as np
 from flask import Flask, request, jsonify, render_template, send_from_directory
 
+import archivio
 import riconoscimento as R
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 MODELLI_DIR = os.path.join(BASE, "modelli")
-DB = os.path.join(BASE, "recapiti.db")
 LOG_ESITI = os.path.join(BASE, "esiti.jsonl")
 
 MAX_UPLOAD = 12 * 1024 * 1024     # una foto di telefono sta ampiamente sotto
@@ -82,19 +86,6 @@ def _leggi_foto(req):
     if img.shape[0] * img.shape[1] > MAX_PIXEL:
         return None, mid, "immagine troppo grande"
     return img, mid, None
-
-
-def _init_db():
-    con = sqlite3.connect(DB)
-    con.execute("""CREATE TABLE IF NOT EXISTS recapiti(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ts TEXT, codice TEXT, modello TEXT, casella_id TEXT, etichetta TEXT, qr TEXT)""")
-    cols = {r[1] for r in con.execute("PRAGMA table_info(recapiti)")}
-    if "qr" not in cols:
-        con.execute("ALTER TABLE recapiti ADD COLUMN qr TEXT")
-    con.execute("CREATE INDEX IF NOT EXISTS idx_recapiti_ts ON recapiti(ts)")
-    con.execute("CREATE INDEX IF NOT EXISTS idx_recapiti_codice ON recapiti(codice)")
-    con.commit(); con.close()
 
 
 def _traccia(evento, dati):
@@ -241,19 +232,20 @@ def salva():
     if cid not in valide:
         return jsonify({"errore": f"casella non valida per il modello {mid}"}), 400
 
+    rec = {"ts": datetime.datetime.now().isoformat(timespec="seconds"),
+           "codice": str(d.get("codice", ""))[:64], "modello": mid, "casella_id": cid,
+           "etichetta": valide[cid]["etichetta"], "qr": str(d.get("qr", ""))[:64]}
+    # Un MySQL spento NON e' un errore per l'operatore: il recapito resta nella coda locale e
+    # parte da solo. Solo se fallisce anche il disco locale il dato non e' al sicuro.
     try:
-        con = sqlite3.connect(DB)
-        con.execute("INSERT INTO recapiti(ts,codice,modello,casella_id,etichetta,qr) VALUES(?,?,?,?,?,?)",
-                    (datetime.datetime.now().isoformat(timespec="seconds"),
-                     str(d.get("codice", ""))[:64], mid, cid,
-                     valide[cid]["etichetta"], str(d.get("qr", ""))[:64]))
-        con.commit(); con.close()
+        dove = archivio.salva(rec)
     except sqlite3.Error:
         log.exception("salvataggio fallito")
         return jsonify({"errore": "salvataggio fallito"}), 500
 
-    _traccia("salva", {"modello": mid, "casella_id": cid, "con_qr": bool(d.get("qr"))})
-    return jsonify({"ok": True})
+    _traccia("salva", {"modello": mid, "casella_id": cid, "con_qr": bool(d.get("qr")),
+                       "destinazione": dove})
+    return jsonify({"ok": True, "destinazione": dove})
 
 
 if __name__ == "__main__":
@@ -263,7 +255,10 @@ if __name__ == "__main__":
     ap.add_argument("--https", action="store_true", help="HTTPS autofirmato (per la fotocamera con la guida)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    _init_db()
+    try:
+        archivio.avvia()
+    except archivio.ConfigErrata as e:
+        ap.exit(1, f"config.json non valido: {e}\n")
     if not args.https:
         log.warning("avviato in HTTP: da telefono la fotocamera con guida e auto-scatto NON "
                     "sara' disponibile (i browser la concedono solo in HTTPS o su localhost). "

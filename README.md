@@ -66,6 +66,10 @@ confrontare due versioni sullo stesso metro, non a promettere una percentuale al
 
 (`pyopenssl` è richiesto per HTTPS, necessario per la fotocamera attiva con sagoma.)
 
+Solo se i recapiti vanno salvati su MySQL (vedi sotto):
+
+    pip install pymysql
+
 ## Avvio del server
 
     python server.py --https
@@ -93,10 +97,38 @@ La prima volta compare un avviso "certificato non attendibile" (autofirmato): to
    - Se è giusto → tocca **Conferma e salva**.
    - Se è sbagliato o non c'è proposta → tocca la casella corretta, poi **Conferma e salva**.
 4. Togli la busta: il sistema si riarma automaticamente per la successiva.  
-   I dati confermati finiscono in `recapiti.db` (SQLite).
+   I dati confermati finiscono su **MySQL** se configurato (vedi sotto), altrimenti in
+   `recapiti.db` (SQLite).
 
 La conferma è **sempre** richiesta: una foto storta o anomala non produce mai un dato
 sbagliato in silenzio, al massimo diventa una scelta manuale.
+
+## Salvataggio su MySQL (facoltativo)
+
+1. Copia `config.esempio.json` in `config.json` (resta solo sul PC del server: non è versionato
+   perché contiene la password) e compila:
+   - `connessione`: `mysql://utente:password@host:3306/database`. I caratteri speciali nella
+     password vanno codificati: `@` → `%40`, `:` → `%3A`, `/` → `%2F`, `#` → `%23`, `%` → `%25`.
+   - `tabella`: la tabella **già esistente** in cui scrivere (l'app non la crea).
+   - `colonne`: a sinistra il dato dell'app (`ts`, `codice`, `modello`, `casella_id`,
+     `etichetta`, `qr`), a destra il nome della colonna nella tabella. Togli una riga per non
+     salvare quel dato.
+2. Controlla la configurazione senza avviare il server:
+
+       python verifica_mysql.py
+
+   Elenca le colonne della tabella, indica quale dato compila ciascuna e segnala colonne
+   inesistenti o colonne obbligatorie che l'app non compila.
+3. Riavvia il server: nel log compare la tabella usata ed eventuali incoerenze.
+
+Se MySQL **non risponde**, il recapito finisce in una **coda locale** (tabella `in_attesa` di
+`recapiti.db`) e viene reinviato in automatico ogni 60 secondi: l'operatore vede comunque
+"Salvato ✓" (il dato è al sicuro) e non aspetta più di 3 secondi. Se MySQL **rifiuta** un
+recapito (colonna sbagliata, dato troppo lungo, chiave duplicata) il recapito resta in coda e il
+log lo segnala: si corregge tabella o `config.json` e alla ripartenza viene reinviato.
+
+Senza `config.json` tutto funziona come prima, in `recapiti.db`. I recapiti già presenti in
+`recapiti.db` **non** vengono inviati a MySQL.
 
 ## Aggiungere un nuovo modello di busta
 
@@ -147,8 +179,8 @@ il primo in ordine alfabetico.
 
 ## Privacy
 
-La foto contiene nome e indirizzo del destinatario. Lo strumento salva a database solo
-codice + motivo (+ eventuale codice QR), non l'immagine. `esiti.jsonl` registra solo numeri
+La foto contiene nome e indirizzo del destinatario. Lo strumento salva a database (SQLite,
+MySQL e coda locale) solo codice + motivo (+ eventuale codice QR), non l'immagine. `esiti.jsonl` registra solo numeri
 (riscontri, residuo, punteggi delle caselle) e nessun dato del destinatario. Se in futuro vorrai conservare i ritagli per migliorare la
 calibrazione, ritaglia il solo riquadro e tieni il minimo indispensabile (principio GDPR).
 
@@ -166,7 +198,11 @@ calibrazione, ritaglia il solo riquadro e tieni il minimo indispensabile (princi
     static/js/           logica dell'interfaccia (cornice, fotocamera, auto-scatto, QR, verifica)
     static/jsQR.js       libreria QR (offline, lato client)
     modelli/             modelli: json + immagine del modulo vuoto (riferimento + sagoma-guida)
-    recapiti.db          database SQLite (creato all'avvio; colonna qr per il codice QR)
+    archivio.py          salvataggio dei recapiti: MySQL con coda locale, oppure SQLite
+    config_mysql.py      lettura e validazione della sezione "mysql" di config.json
+    verifica_mysql.py    controlla config.json contro la tabella MySQL vera
+    config.esempio.json  modello di config.json (config.json non è versionato: ha la password)
+    recapiti.db          database SQLite (creato all'avvio; tabella recapiti + coda in_attesa)
     esiti.jsonl          traccia di ogni analisi (senza immagini): serve a capire i casi difficili
 
 Debug OMR: avviando il server con `DBG_OMR=1` salva `_dbg_crop.jpg` e `_dbg_aligned.png`
