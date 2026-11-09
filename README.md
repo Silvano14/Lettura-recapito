@@ -134,7 +134,7 @@ il primo in ordine alfabetico.
 - Buste **senza riquadro stampato** (postino che barra a mano la finestra) o segni molto
   ambigui → vanno a inserimento manuale. È atteso.
 - Un **modello mai calibrato** non viene riconosciuto: prima va aggiunto con `calibra.py`.
-- Le soglie (`ABS_MIN`, `MARGINE`, `MIN_INLIER` in `riconoscimento.py`) sono tarate sul banco:
+- Le soglie (`ABS_MIN`, `MARGINE`, `MIN_INLIER` in `soglie.py`) sono tarate sul banco:
   fra 0,08 e 0,12 di `ABS_MIN` il risultato non cambia, quindi il valore non è critico.
   Dopo le prime centinaia di buste reali, `esiti.jsonl` dice se vanno ritoccate.
 - La soglia dell'**auto-scatto** (`AUTO_MIN`, default 45) va tarata sul campo: il badge mostra
@@ -155,10 +155,15 @@ calibrazione, ritaglia il solo riquadro e tieni il minimo indispensabile (princi
 ## File del progetto
 
     server.py            server locale + endpoint
-    riconoscimento.py    registrazione + ancoraggio + misura + decisione (cuore CV)
+    riconoscimento.py    cuore CV: caricamento del modello + decisione (unica porta d'ingresso)
+    registrazione.py     allineamento al modello (ORB + omografia + residuo)
+    misura_caselle.py    ancoraggio del quadratino stampato + misura dell'inchiostro
+    soglie.py            tutte le soglie del riconoscimento, in un solo posto
     banco.py             banco di prova sintetico: misura quanto è affidabile il riconoscimento
     calibra.py           helper per creare nuovi modelli
-    templates/index.html interfaccia mobile (guida, selettore modello, lettura QR, conferma)
+    templates/index.html interfaccia mobile: solo markup
+    static/app.css       stile dell'interfaccia
+    static/js/           logica dell'interfaccia (cornice, fotocamera, auto-scatto, QR, verifica)
     static/jsQR.js       libreria QR (offline, lato client)
     modelli/             modelli: json + immagine del modulo vuoto (riferimento + sagoma-guida)
     recapiti.db          database SQLite (creato all'avvio; colonna qr per il codice QR)

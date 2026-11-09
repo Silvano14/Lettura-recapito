@@ -11,8 +11,21 @@ evitano): mantenere quello stile invece di descrivere cosa fa la riga.
 
 ## Comandi
 
-Ambiente: venv già presente in `.venv` (Python 3.12, Flask + opencv-python-headless + numpy +
-pyOpenSSL). Non esiste `requirements.txt`; le dipendenze sono elencate nel README.
+Ambiente: Python 3.12 in un venv `.venv`, **non versionato**: va creato su ogni macchina (serve
+un Python 3.12 installato). Non esiste `requirements.txt`; le dipendenze sono quelle del README:
+
+```bash
+python -m venv .venv
+```
+
+```bash
+.venv/bin/python -m pip install flask opencv-python-headless numpy pyopenssl
+```
+
+L'interprete del venv è `.venv/bin/python` su Linux/macOS e `.venv\Scripts\python.exe` su
+Windows; gli esempi sotto usano la forma POSIX. Va sempre richiamato per percorso: lo stato della
+shell non persiste fra un comando e l'altro, e su Windows `python` fuori dal venv può essere
+l'alias del Microsoft Store invece di un interprete vero.
 
 ```bash
 .venv/bin/python server.py --https          # server; HTTPS obbligatorio per camera+sagoma da telefono
@@ -25,8 +38,14 @@ pyOpenSSL). Non esiste `requirements.txt`; le dipendenze sono elencate nel READM
 Il banco è l'unico test automatico. Varianti utili:
 
 ```bash
-.venv/bin/python banco.py --modello mod24b --casi 40 --salva-errori /tmp/errori
+.venv/bin/python banco.py --modello mod24b --casi 40 --salva-errori <cartella>
 ```
+
+**Il banco esce sempre con codice 0**: non è un pass/fail, vanno lette le tre percentuali che
+stampa. Default: `--seed 12345`, `--casi 8` (foto per casella). Oltre ai casi con un segno genera
+casi con **nessun segno** e con **due segni** (uno destinatario + uno indirizzo): lì l'unico esito
+corretto è "nessuna proposta" e qualunque proposta conta come sbagliata. È così che il banco
+verifica l'invariante di sicurezza descritto sotto.
 
 Analisi di **una singola foto** (il caso "run a single test"), stampa il JSON della decisione
 e scrive `_aligned_debug.png`:
@@ -45,19 +64,40 @@ Calibrazione di un nuovo modello (richiede uno schermo, usa finestre OpenCV):
 ```
 
 `.claude/launch.json` avvia il server in **HTTP** sulla porta 8732: utile per provare gli
-endpoint, ma da telefono non dà camera con sagoma né auto-scatto.
+endpoint, ma da telefono non dà camera con sagoma né auto-scatto. Ha due configurazioni con lo
+stesso server: `rilevatore` (`.venv/bin/python`, Linux/macOS) e `rilevatore-windows`
+(`.venv\Scripts\python.exe`). Nel pannello browser di Claude la fotocamera è bloccata, quindi la
+pagina parte in modalità ridotta: si prova il giro analisi → verifica → salvataggio, non
+l'auto-scatto.
 
 ## Architettura
 
-Server Flask locale (`server.py`) + interfaccia mobile a pagina singola (`templates/index.html`)
-+ cuore di computer vision (`riconoscimento.py`). Tutto offline, solo OpenCV/numpy su CPU:
+Server Flask locale (`server.py`) + interfaccia mobile a pagina singola + cuore di computer
+vision (`riconoscimento.py` e moduli collegati). Tutto offline, solo OpenCV/numpy su CPU:
 nessun modello generativo, nessuna chiamata di rete.
+
+L'interfaccia è `templates/index.html` (solo markup) + `static/app.css` + script **classici** in
+`static/js/` (niente moduli ES né build): condividono l'ambito globale, quindi lo stato (`modello`,
+`stream`, `auto`, `FRAME`, `qrValue`…) è visibile da tutti. L'ordine dei `<script>` conta solo per
+il codice eseguito al caricamento: `stato.js` (stato e `$`) per primo, `avvio.js` (avvia modelli e
+fotocamera) per ultimo. Una variabile di primo livello va dichiarata in **un solo** file: una
+seconda dichiarazione con `let`/`const` è un SyntaxError che blocca l'intero script.
 
 ### Il modello di busta è il contratto centrale
 
 Un modello = `modelli/<id>.json` + un PNG del **modulo vuoto**. Il JSON contiene le caselle in
 **coordinate normalizzate** (`x`,`y` in 0..1 sul riferimento), `dim_riferimento` e
 `cella_w`/`cella_h` (dimensione del quadratino stampato, anch'essa normalizzata).
+Il modello predefinito (selezionato all'avvio e usato da `banco.py` senza `--modello`) è quello
+con `"predefinito": true`; in mancanza, il primo in ordine alfabetico (per nome visualizzato
+nell'interfaccia, per id del file in `banco.py`).
+
+**Quale PNG conta davvero**: `server.py` e `riconoscimento.py` usano solo il file indicato nel
+campo `riferimento` (per i modelli inclusi `*_modulo.png`). `banco.py` usa `template` se
+presente, altrimenti `riferimento`, come base per le foto sintetiche. I file `*_ref.png` e
+`*_tpl.png` in `modelli/` non sono referenziati da nessun JSON né codice: modificarli non ha
+effetto. Attenzione però: `calibra.py` scrive `<id>_ref.png` e lo mette in `riferimento`, quindi
+per un modello nuovo il file usato sarà quello.
 
 `R.carica_template()` arricchisce il dict con campi derivati (prefisso `_`, mai serializzati):
 `_ref`/`_ref_g` (riferimento ridimensionato a `dim_riferimento`), `_kp`/`_des` (ORB del
@@ -68,10 +108,14 @@ che il campo esistesse), `_sagome` (ritaglio del quadratino vuoto per ogni casel
 semitrasparente mostrata all'operatore (`GET /riferimento/<id>`), e sagoma con cui si ritrova
 il quadratino nell'ancoraggio locale. Per questo *deve* essere un modulo completamente vuoto:
 un segno a penna nel riferimento degrada tutte e tre le cose. `calibra.py` porta il riferimento
-a 1200 px di larghezza (`LARGHEZZA`) — le soglie di `riconoscimento.py` sono espresse in questi
+a 1200 px di larghezza (`LARGHEZZA`) — le soglie di `soglie.py` sono espresse in questi
 pixel canonici.
 
-### Pipeline di riconoscimento (`riconoscimento.py`)
+### Pipeline di riconoscimento
+
+`riconoscimento.py` è l'unica porta d'ingresso (`carica_template`, `analizza`, `qualita_aggancio`,
+soglie ri-esportate): `server.py` e `banco.py` importano solo da lì. Il passo 1 sta in
+`registrazione.py`, i passi 2-3 in `misura_caselle.py`, la decisione in `riconoscimento.analizza`.
 
 1. **`_registra`** — ORB + `findHomography` RANSAC verso il riferimento. La foto viene prima
    normalizzata a `SCALA_ORB * W` (ORB non regge oltre ~2x di differenza di scala).
@@ -89,9 +133,12 @@ pixel canonici.
 4. **decisione in `analizza`** — la migliore vince solo se supera `ABS_MIN` **e** stacca la
    seconda di `MARGINE` (differenza, non rapporto: il punteggio ha un fondo additivo).
 
-Tutte le soglie (`ABS_MIN`, `MARGINE`, `MIN_INLIER`, `RESIDUO_MAX`, `AUTO_MIN`, `SCALA_ORB`)
-vivono **solo** in cima a `riconoscimento.py`; `AUTO_MIN` arriva al client nella risposta di
-`/aggancio` (campo `soglia`), quindi il JS non la duplica mai.
+Tutte le soglie (`ABS_MIN`, `MARGINE`, `CONTRASTO_MIN`, `MIN_INLIER`, `RESIDUO_MAX`, `AUTO_MIN`,
+`SCALA_ORB`) vivono **solo** in `soglie.py`; `riconoscimento.py` le ri-esporta. `AUTO_MIN` arriva
+al client nella risposta di `/aggancio` (campo `soglia`), quindi il JS non la duplica.
+**Eccezione da ricordare**: la riga diagnostica in `static/js/verifica.js` (`mostraVerifica`)
+contiene copie fisse di `ABS_MIN` (`0.10`) e `RESIDUO_MAX` (`2.5`): se si ritoccano quelle soglie,
+vanno aggiornate anche lì.
 
 ### Invariante di sicurezza: nessun salvataggio automatico
 
@@ -103,7 +150,7 @@ conferma dell'operatore, e `POST /salva` rivalida `casella_id` contro il templat
 
 ### Ciclo client/server dell'auto-scatto
 
-`FRAME` (in `index.html`) è espresso in **frazioni del fotogramma**, non in pixel a schermo:
+`FRAME` (in `static/js/cornice.js`) è espresso in **frazioni del fotogramma**, non in pixel a schermo:
 una sola grandezza descrive sia la cornice che l'operatore vede sia il ritaglio inviato al
 server, e le due non possono divergere. `applyFrame()` la ricalcola dal rapporto del modello
 (`dim_riferimento`) e dal rettangolo realmente occupato dal video.
@@ -114,8 +161,9 @@ server, e le due non possono divergere. `applyFrame()` la ricalcola dal rapporto
 - `STABLE` (3) fotogrammi `ok` di fila → scatto automatico e `POST /analizza`.
 - Il **riarmo** richiede che gli inlier scendano sotto `ARM_FRAZ` della soglia (busta tolta):
   senza questo si riscatterebbe di continuo sulla stessa busta.
-- `auto.giro` invalida le risposte in ritardo: una sonda di un ciclo già chiuso non deve poter
-  far scattare una foto durante la verifica, cancellando la scelta dell'operatore.
+- `auto.giro` (in `static/js/auto.js`, come tutto il ciclo della sonda) invalida le risposte in
+  ritardo: una sonda di un ciclo già chiuso non deve poter far scattare una foto durante la
+  verifica, cancellando la scelta dell'operatore.
 
 Il QR (`static/jsQR.js`, offline) si legge **lato client dal fotogramma intero**, in modo
 continuo finché non riesce; popola un campo non modificabile a mano. Solo per i modelli con
@@ -137,8 +185,14 @@ immagini o di dati personali senza che sia una richiesta esplicita.
 
 ## Note sulla modifica del riconoscimento
 
-Prima e dopo qualsiasi cambio a `riconoscimento.py`, eseguire `banco.py` sullo stesso seed e
+Prima e dopo qualsiasi cambio al riconoscimento (`riconoscimento.py`, `registrazione.py`,
+`misura_caselle.py`, `soglie.py`), eseguire `banco.py` sullo stesso seed e
 confrontare le tre percentuali: corrette / **proposte sbagliate** (il caso pericoloso) /
 nessuna proposta. I numeri del banco sono un **limite superiore** — le foto derivano dalla
 stessa immagine usata come riferimento — quindi servono a confrontare due versioni sullo stesso
 metro, non a promettere una percentuale sul campo.
+
+`mod24b` parte già più basso di `sd24c6` (circa 80% di corrette contro 90%, nessuna proposta
+sbagliata; i valori esatti cambiano un po' con la versione di OpenCV): il suo
+riferimento è stato ricavato da una foto con una casella barrata. È un limite noto del modello,
+non una regressione; si risolve ricalibrandolo con `calibra.py` su un modulo vuoto.

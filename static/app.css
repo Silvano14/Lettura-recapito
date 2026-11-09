@@ -1,0 +1,81 @@
+:root{ --bg:#0f1115; --card:#1a1d24; --line:#2b2f3a; --txt:#e8eaf0; --mut:#9aa0ad;
+       --accent:#3b82f6; --ok:#16a34a; --warn:#d97706; }
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt);
+     height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header b{font-size:15px}
+#modelloBtn{background:#222634;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px}
+/* layout a tutta altezza, valido in QUALSIASI orientamento: la camera riempie lo spazio,
+   i controlli stanno sotto. fase2 scorre internamente se serve (niente scroll di pagina). */
+.wrap{flex:1;min-height:0;width:100%;max-width:960px;margin:0 auto;padding:8px 10px;display:flex;flex-direction:column}
+#fase1:not(.hidden){display:flex;flex-direction:column;gap:8px;flex:1;min-height:0}
+#fase2:not(.hidden){display:flex;flex-direction:column;gap:0;flex:1;min-height:0;overflow:auto}
+.camArea{position:relative;border-radius:14px;overflow:hidden;background:#000;flex:1;min-height:0;width:100%}
+video{width:100%;height:100%;object-fit:contain;display:block;background:#000}
+canvas,img.prev{width:100%;height:100%;object-fit:contain;display:block}
+/* La cornice-guida si adatta alle proporzioni del modello scelto: --fx/--fy/--fw/--fh
+   sono calcolati in JS in PIXEL sopra il rettangolo realmente occupato dal fotogramma,
+   così la sagoma non è mai distorta e la cornice che si vede è esattamente il ritaglio
+   inviato a /analizza. I fallback in percentuale valgono finché il JS non li ricalcola. */
+/* la sagoma riempie ESATTAMENTE la cornice: contenitore dimensionato dai margini, img al 100%.
+   (un <img> assoluto con width:auto userebbe la dimensione naturale, ignorando right/bottom) */
+.ghostbox{position:absolute;left:var(--fx,10%);top:var(--fy,20%);width:var(--fw,80%);height:var(--fh,60%);pointer-events:none}
+.ghostbox img{width:100%;height:100%;object-fit:fill;opacity:.32;border-radius:12px;display:block}
+.guide{position:absolute;inset:0;pointer-events:none}
+.guide div.cornice{position:absolute;left:var(--fx,10%);top:var(--fy,20%);width:var(--fw,80%);height:var(--fh,60%);
+                   border:3px dashed rgba(255,255,255,.85);border-radius:12px;box-sizing:content-box;margin:-3px;
+                   transition:border-color .15s,box-shadow .15s}
+.guide.vicino div.cornice{border-color:#f59e0b}
+.guide.lock div.cornice{border-color:#22c55e;border-style:solid;box-shadow:0 0 0 9999px rgba(34,197,94,.07) inset}
+.guide.attesa div.cornice{border-color:#6b7280}
+.badge{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;padding:6px 12px;border-radius:20px;font-size:13px;white-space:nowrap}
+/* badge stato QR (il QR si legge dal fotogramma intero) */
+#qrbadge{position:absolute;left:50%;top:var(--fy,20%);transform:translate(-50%,6px);background:rgba(0,0,0,.55);color:#cfe3ff;padding:4px 11px;border-radius:14px;font-size:12px;white-space:nowrap;pointer-events:none;max-width:80%;overflow:hidden;text-overflow:ellipsis}
+#qrbadge.ok{background:rgba(22,163,74,.85);color:#fff}
+#autoBtn{margin-left:auto;background:#16233b;color:var(--txt);border:1px solid var(--accent);border-radius:10px;padding:8px 12px;font-size:14px}
+#autoBtn.off{background:#222634;border-color:var(--line);color:var(--mut)}
+.hint{font-size:13px;color:var(--mut);margin:10px 2px}
+button.big{width:100%;border:0;border-radius:12px;padding:16px;font-size:17px;font-weight:600;color:#fff;background:var(--accent);margin-top:12px}
+button.big:active{filter:brightness(.9)}
+.codice{width:100%;margin-top:12px;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--txt);font-size:16px}
+.banner{background:#3a2a12;border:1px solid var(--warn);color:#f5c878;padding:10px 12px;border-radius:10px;
+        margin:0 0 8px;font-size:13px;line-height:1.45;flex:none}
+.banner b{color:#ffd89a}
+.banner.err{background:#3a1616;border-color:#dc2626;color:#fca5a5}
+.avviso{background:#3a2a12;border:1px solid var(--warn);color:#f5c878;padding:10px 12px;border-radius:10px;margin-top:12px;font-size:14px}
+.grp{margin-top:16px}
+.grp h4{margin:0 0 8px;color:var(--mut);font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+.opt{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--card);color:var(--txt);
+     border-radius:12px;padding:15px;font-size:16px;margin-bottom:8px}
+.opt.sel{border-color:var(--accent);background:#16233b}
+.opt.proposta{border-color:var(--ok)}
+.opt .tag{float:right;font-size:12px;color:var(--ok)}
+/* fase2: scelte compatte in griglia unica — destinatario a sinistra, indirizzo a destra (come la busta) */
+.opzioni-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+.opzioni-grid .col h4{margin:0 0 6px;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+#opzioni .opt{padding:9px 11px;font-size:14px;margin-bottom:6px;border-radius:10px}
+/* riga del codice raccomandata (riempito dal QR, non editabile a mano) + pulsante ri-scansione */
+.codice-row{display:flex;gap:8px;margin-top:10px;align-items:stretch}
+.codice-row .codice{margin-top:0;flex:1}
+.codice[readonly]{opacity:.95}
+.qrbtn{border:1px solid var(--accent);background:#16233b;color:var(--txt);border-radius:12px;padding:0 16px;font-size:14px;white-space:nowrap;font-weight:600}
+/* overlay di scansione del solo QR */
+.qrscan{position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:4/3;max-height:44vh;margin-bottom:8px}
+.qrscan video{width:100%;height:100%;object-fit:cover;display:block}
+.qrscan>div{position:absolute;left:22%;right:22%;top:14%;bottom:14%;border:3px dashed rgba(96,165,250,.9);border-radius:12px;pointer-events:none}
+#dlgQr{width:92%;max-width:460px;max-height:92vh;overflow:auto}
+.hidden{display:none}
+dialog{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:14px;width:90%;max-width:420px}
+dialog .opt{margin-bottom:8px}
+.saved{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ok);color:#fff;padding:12px 18px;border-radius:30px;font-weight:600;opacity:0;transition:.2s}
+.saved.show{opacity:1}
+/* controlli sotto la camera; in verifica l'anteprima è contenuta e le scelte non si dilatano */
+.controls{display:flex;gap:8px;align-items:center;flex:none}
+.controls .big{margin-top:0;flex:1}
+#fase2 .prev{flex:none;max-height:34vh}
+#fase2 #opzioni,#fase2 .codice-row,#fase2 .big,#fase2 .avviso{flex:none}
+/* riga diagnostica: perché non è stata proposta una casella (livello, aggancio, punteggi) */
+#diag{flex:none;margin-top:10px;padding:9px 11px;border-radius:10px;border:1px dashed var(--line);
+      background:#15171d;color:var(--mut);font-size:12px;line-height:1.5}
+#diag b{color:var(--txt)}

@@ -6,6 +6,12 @@
       "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["server.py", "--port", "8732"],
       "port": 8732
+    },
+    {
+      "name": "rilevatore-windows",
+      "runtimeExecutable": ".venv\\Scripts\\python.exe",
+      "runtimeArgs": ["server.py", "--port", "8732"],
+      "port": 8732
     }
   ]
 }
