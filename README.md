@@ -125,7 +125,8 @@ Se MySQL **non risponde**, il recapito finisce in una **coda locale** (tabella `
 `recapiti.db`) e viene reinviato in automatico ogni 60 secondi: l'operatore vede comunque
 "Salvato ✓" (il dato è al sicuro) e non aspetta più di 3 secondi. Se MySQL **rifiuta** un
 recapito (colonna sbagliata, dato troppo lungo, chiave duplicata) il recapito resta in coda e il
-log lo segnala: si corregge tabella o `config.json` e alla ripartenza viene reinviato.
+log lo segnala. Corretta la tabella, il reinvio riprova da solo entro 60 secondi; corretto
+`config.json`, va riavviato il server.
 
 Senza `config.json` tutto funziona come prima, in `recapiti.db`. I recapiti già presenti in
 `recapiti.db` **non** vengono inviati a MySQL.

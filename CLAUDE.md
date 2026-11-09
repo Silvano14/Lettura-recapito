@@ -19,8 +19,10 @@ python -m venv .venv
 ```
 
 ```bash
-.venv/bin/python -m pip install flask opencv-python-headless numpy pyopenssl
+.venv/bin/python -m pip install flask opencv-python-headless numpy pyopenssl pymysql
 ```
+
+(`pymysql` serve solo se `config.json` configura MySQL; senza, il server non lo importa.)
 
 L'interprete del venv è `.venv/bin/python` su Linux/macOS e `.venv\Scripts\python.exe` su
 Windows; gli esempi sotto usano la forma POSIX. Va sempre richiamato per percorso: lo stato della
@@ -61,6 +63,13 @@ Calibrazione di un nuovo modello (richiede uno schermo, usa finestre OpenCV):
 
 ```bash
 .venv/bin/python calibra.py foto_del_riquadro_VUOTO.jpg
+```
+
+Controllo di `config.json` contro la tabella MySQL vera, senza avviare il server (elenca le
+colonne, segnala quelle inesistenti o obbligatorie non compilate; esce con 1 se qualcosa non va):
+
+```bash
+.venv/bin/python verifica_mysql.py
 ```
 
 `.claude/launch.json` avvia il server in **HTTP** sulla porta 8732: utile per provare gli
@@ -176,10 +185,37 @@ non deve continuare a servire le caselle vecchie. `GET /modelli` salta i JSON ro
 far cadere l'applicazione. Difese sull'upload: `MAX_UPLOAD`, `MAX_PIXEL`, e `_leggi_foto` che
 non lascia passare nessun input capace di far cadere il server.
 
+### Salvataggio (`archivio.py`)
+
+`POST /salva` scrive **solo** tramite `archivio.salva(rec)`, che risponde con la destinazione
+(`mysql` / `in_attesa` / `locale`, anche nel campo `destinazione` della risposta).
+
+- **Senza `config.json`** (o senza la sezione `"mysql"`): SQLite, tabella `recapiti` di
+  `recapiti.db`, come prima di MySQL. `config.json` non è versionato (contiene la password);
+  il modello è `config.esempio.json`.
+- **Con MySQL**: la tabella **esiste già e l'app non la crea**. La mappatura `colonne` (campo
+  dell'app → colonna) sta nel config apposta: la struttura della tabella vera non è ancora nota,
+  e adattarsi deve voler dire cambiare il config, non il codice. `config_mysql.py` ammette nei
+  nomi di tabella/colonna solo `[A-Za-z0-9_]` perché finiscono interpolati nell'SQL (i valori
+  invece sono parametri). Un `config.json` presente ma errato **ferma l'avvio** del server:
+  meglio che lavorare un giorno credendo di salvare su MySQL.
+- **MySQL che non risponde** non è un errore per l'operatore: il recapito va nella coda
+  `in_attesa` di `recapiti.db` (JSON con tutti i `CAMPI`) e un thread la svuota ogni
+  `INTERVALLO_REINVIO` secondi. Finché MySQL risulta giù (`_giu`) i nuovi recapiti si accodano
+  subito, senza aspettare `TIMEOUT_S` a ogni busta e rispettando l'ordine. Errori con codice
+  ≥ 2000 o di rete = connessione (si riprova); codici 1000-1999 = il server rifiuta **quella**
+  riga (colonna inesistente, dato troppo lungo): resta in coda, si segnala una volta e non
+  blocca le altre. Le righe storiche di `recapiti` non vengono mai inviate a MySQL.
+
+Il banco non tocca l'archivio. Per provarlo senza un MySQL vero basta un host irraggiungibile
+(`127.0.0.1:1`) e un `archivio.DB` temporaneo: **mai** provare con MySQL configurato sul
+`recapiti.db` reale, perché i recapiti di prova rimasti in coda finirebbero nel database vero.
+
 ## Privacy (vincolo di progetto)
 
-La foto contiene nome e indirizzo del destinatario. `recapiti.db` salva **solo** codice, modello,
-casella, etichetta e QR — **mai l'immagine**. `esiti.jsonl` (`_traccia`) registra solo numeri
+La foto contiene nome e indirizzo del destinatario. `recapiti.db` (tabella e coda) e la tabella
+MySQL salvano **solo** i `CAMPI` di `config_mysql.py` (data/ora, codice, modello, casella,
+etichetta, QR) — **mai l'immagine**. `esiti.jsonl` (`_traccia`) registra solo numeri
 (inlier, residuo, punteggi) e nessun dato del destinatario. Non introdurre persistenza di
 immagini o di dati personali senza che sia una richiesta esplicita.
 
